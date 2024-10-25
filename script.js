@@ -14,10 +14,12 @@ const executeQuery = async () => {
 
 		// get the distinct roles
 		const data = await getDistinctRoles(collection);
-		console.log("Roles: ", data);
+		// console.log("Roles: ", data);
 
 		//create collection of the roles
-		await createRoles(db, data);
+		// await createRoles(db, data);
+
+		await addRolesIdsToAccounts(db);
 	} catch (err) {
 		console.log(err);
 	}
@@ -82,6 +84,46 @@ const createRoles = async (db, roles_list) => {
 		// console.log("Inserted roles: ", insertedRoles);
 	} catch (err) {
 		console.log(err);
+	}
+};
+
+// map account roles to their ids
+const addRolesIdsToAccounts = async (db) => {
+	try {
+		const response = await db.collection("accounts").aggregate([
+			{
+				$project: {
+					roles: {
+						$objectToArray: "$roles",
+					},
+				},
+			},
+			{
+				$lookup: {
+					from: "roles",
+					localField: "roles.k",
+					foreignField: "name",
+					as: "accounts_roles",
+				},
+			},
+			{
+				$set: {
+					roles_ids: "$accounts_roles._id",
+				},
+			},
+		]);
+
+		for await (const doc of response) {
+			await db
+				.collection("accounts")
+				.updateOne(
+					{ _id: doc._id },
+					{ $set: { roles_ref: doc.roles_ids } },
+				);
+		}
+		console.log(`Updated roles successfully. Roles of: `);
+	} catch (err) {
+		console.log("error in adding ids ", err);
 	}
 };
 
